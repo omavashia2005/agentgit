@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>agentgit</title>
+
+  <script src="https://unpkg.com/3d-force-graph@1.73.3/dist/3d-force-graph.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #080810;
+      --col-prompt:     #7dd3fc;
+      --col-file-add:   #22c55e;
+      --col-file-mod:   #f59e0b;
+      --col-file-del:   #f43f5e;
+      --col-bash:       #fb923c;
+      --col-read:       #6b7280;
+      --col-web:        #a78bfa;
+      --col-subagent:   #2dd4bf;
+      --ui-font: 'JetBrains Mono', 'Courier New', monospace;
+      --ui-dim: 0.55;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: #fff;
+      font-family: var(--ui-font);
+    }
+
+    #graph {
+      position: fixed;
+      inset: 0;
+    }
+
+    /* ── wordmark ── */
+    #wordmark {
+      position: fixed;
+      top: 20px;
+      left: 24px;
+      z-index: 10;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      color: var(--col-prompt);
+      opacity: 0.7;
+      user-select: none;
+      pointer-events: none;
+      text-transform: lowercase;
+    }
+
+    #wordmark::before {
+      content: '◈ ';
+      font-size: 11px;
+      opacity: 0.8;
+    }
+
+    /* ── stats panel (top-right) ── */
+    #stats {
+      position: fixed;
+      top: 20px;
+      right: 24px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .stat-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 10px;
+      font-weight: 300;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.28);
+      transition: color 0.3s;
+    }
+
+    .stat-row.updated {
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .stat-value {
+      font-weight: 500;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      min-width: 28px;
+      text-align: right;
+      transition: color 0.3s;
+    }
+
+    .stat-row.updated .stat-value {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .stat-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--col-read);
+      transition: background 0.3s;
+    }
+
+    .stat-dot.live {
+      background: var(--col-file-add);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.6); }
+    }
+
+    /* ── legend (bottom-left) ── */
+    #legend {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      pointer-events: none;
+      user-select: none;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.5s, transform 0.5s;
+    }
+
+    #legend.visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: all;
+    }
+
+    #legend-header {
+      font-size: 8px;
+      font-weight: 400;
+      letter-spacing: 0.18em;
+      color: rgba(255,255,255,0.18);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    #legend-clear {
+      font-size: 8px;
+      font-weight: 400;
+      letter-spacing: 0.12em;
+      color: rgba(255,255,255,0.25);
+      text-transform: uppercase;
+      cursor: pointer;
+      margin-top: 6px;
+      padding: 3px 0;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      transition: color 0.15s;
+      display: none;
+    }
+    #legend-clear:hover { color: rgba(255,255,255,0.6); }
+    #legend-clear.visible { display: block; }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 9px;
+      font-weight: 300;
+      letter-spacing: 0.1em;
+      color: rgba(255, 255, 255, 0.25);
+      text-transform: uppercase;
+      cursor: pointer;
+      padding: 3px 6px 3px 0;
+      border-radius: 2px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .legend-item:hover {
+      color: rgba(255,255,255,0.55);
+    }
+    .legend-item.active {
+      color: rgba(255,255,255,0.85);
+    }
+    .legend-item.inactive {
+      opacity: 0.3;
+    }
+
+    .legend-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      transition: transform 0.15s;
+    }
+    .legend-item.active .legend-dot {
+      transform: scale(1.5);
+    }
+
+    /* ── tooltip ── */
+    #tooltip {
+      position: fixed;
+      z-index: 20;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      max-width: 280px;
+    }
+
+    #tooltip.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .tooltip-inner {
+      background: rgba(8, 8, 20, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-left: 3px solid #fff;  /* overridden per node type via JS */
+      border-radius: 2px;
+      padding: 8px 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .tooltip-type {
+      font-size: 8px;
+      font-weight: 400;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      opacity: 0.45;
+      margin-bottom: 4px;
+    }
+
+    .tooltip-label {
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      word-break: break-all;
+    }
+
+    .tooltip-detail {
+      font-size: 10px;
+      font-weight: 300;
+      opacity: 0.55;
+      margin-top: 4px;
+      line-height: 1.5;
+      word-break: break-all;
+    }
+
+    /* ── selection hint ── */
+    #hint {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 10;
+      font-size: 9px;
+      font-weight: 300;
+      letter-spacing: 0.1em;
+      color: rgba(255, 255, 255, 0.18);
+      pointer-events: none;
+      user-select: none;
+      text-align: right;
+      line-height: 1.7;
+    }
+
+    /* ── cluster badge (top-center when selected) ── */
+    #cluster-badge {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-8px);
+      z-index: 10;
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0.1em;
+      color: rgba(125, 211, 252, 0.8);
+      background: rgba(125, 211, 252, 0.06);
+      border: 1px solid rgba(125, 211, 252, 0.15);
+      border-radius: 2px;
+      padding: 5px 14px;
+      pointer-events: none;
+      user-select: none;
+      opacity: 0;
+      transition: opacity 0.25s, transform 0.25s;
+    }
+
+    #cluster-badge.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── fade in on load ── */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    #ui-overlay {
+      animation: fadeIn 1.2s ease 0.5s both;
+    }
+  </style>
+</head>
+<body>
+
+<div id="graph"></div>
+
+<div id="ui-overlay">
+  <div id="wordmark">agentgit</div>
+
+  <div id="stats">
+    <div class="stat-row" id="stat-live">
+      <span class="stat-dot" id="live-dot"></span>
+      <span class="stat-label">live</span>
+    </div>
+    <div class="stat-row" id="stat-nodes">
+      <span class="stat-label">nodes</span>
+      <span class="stat-value" id="node-count">—</span>
+    </div>
+    <div class="stat-row" id="stat-links">
+      <span class="stat-label">links</span>
+      <span class="stat-value" id="link-count">—</span>
+    </div>
+  </div>
+
+  <div id="legend">
+    <div id="legend-header">filter by type</div>
+    <div class="legend-item" data-type="prompt"><div class="legend-dot" style="background:var(--col-prompt)"></div>prompt</div>
+    <div class="legend-item" data-type="file_add"><div class="legend-dot" style="background:var(--col-file-add)"></div>file add</div>
+    <div class="legend-item" data-type="file_modify"><div class="legend-dot" style="background:var(--col-file-mod)"></div>file modify</div>
+    <div class="legend-item" data-type="file_delete"><div class="legend-dot" style="background:var(--col-file-del)"></div>file delete</div>
+    <div class="legend-item" data-type="bash"><div class="legend-dot" style="background:var(--col-bash)"></div>bash</div>
+    <div class="legend-item" data-type="read"><div class="legend-dot" style="background:var(--col-read)"></div>read</div>
+    <div class="legend-item" data-type="web_search"><div class="legend-dot" style="background:var(--col-web)"></div>web search</div>
+    <div class="legend-item" data-type="subagent"><div class="legend-dot" style="background:var(--col-subagent)"></div>subagent</div>
+    <div id="legend-clear">× clear filter</div>
+  </div>
+
+  <div id="hint">
+    hover — inspect<br>
+    click prompt — isolate cluster<br>
+    click type — filter<br>
+    click space — clear
+  </div>
+
+  <div id="cluster-badge"></div>
+</div>
+
+<div id="tooltip">
+  <div class="tooltip-inner" id="tooltip-inner">
+    <div class="tooltip-type" id="tooltip-type"></div>
+    <div class="tooltip-label" id="tooltip-label"></div>
+    <div class="tooltip-detail" id="tooltip-detail"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── color map ────────────────────────────────────────────────────────────
+  const NODE_COLORS = {
+    prompt:      '#7dd3fc',
+    file_add:    '#22c55e',
+    file_modify: '#f59e0b',
+    file_delete: '#f43f5e',
+    bash:        '#fb923c',
+    read:        '#6b7280',
+    web_search:  '#a78bfa',
+    subagent:    '#2dd4bf',
+  };
+
+  function hexColor(type) {
+    return NODE_COLORS[type] ?? '#ffffff';
+  }
+
+  // ── state ─────────────────────────────────────────────────────────────────
+  let graphData = { nodes: [], links: [] };
+  let selectedPromptId = null;
+  let activeTypeFilter = new Set(); // empty = all types visible
+  let mouseX = 0;
+  let mouseY = 0;
+
+  // ── DOM refs ──────────────────────────────────────────────────────────────
+  const tooltip       = document.getElementById('tooltip');
+  const tooltipInner  = document.getElementById('tooltip-inner');
+  const tooltipType   = document.getElementById('tooltip-type');
+  const tooltipLabel  = document.getElementById('tooltip-label');
+  const tooltipDetail = document.getElementById('tooltip-detail');
+  const nodeCount     = document.getElementById('node-count');
+  const linkCount     = document.getElementById('link-count');
+  const liveDot       = document.getElementById('live-dot');
+  const statNodes     = document.getElementById('stat-nodes');
+  const statLinks     = document.getElementById('stat-links');
+  const legend        = document.getElementById('legend');
+  const clusterBadge  = document.getElementById('cluster-badge');
+
+  // track mouse globally for tooltip positioning
+  document.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    positionTooltip();
+  });
+
+  function positionTooltip() {
+    const tt = tooltip;
+    const margin = 16;
+    const ttW = 280;
+    const ttH = tooltip.offsetHeight || 80;
+    let x = mouseX + margin;
+    let y = mouseY + margin;
+    if (x + ttW > window.innerWidth)  x = mouseX - ttW - margin;
+    if (y + ttH > window.innerHeight) y = mouseY - ttH - margin;
+    tt.style.left = x + 'px';
+    tt.style.top  = y + 'px';
+  }
+
+  // ── stats updater ─────────────────────────────────────────────────────────
+  let statsFlashTimer = null;
+  function updateStats() {
+    const nc = graphData.nodes.length;
+    const lc = graphData.links.length;
+    nodeCount.textContent = nc;
+    linkCount.textContent = lc;
+    clearTimeout(statsFlashTimer);
+    statNodes.classList.add('updated');
+    statLinks.classList.add('updated');
+    statsFlashTimer = setTimeout(() => {
+      statNodes.classList.remove('updated');
+      statLinks.classList.remove('updated');
+    }, 800);
+
+    // show legend once we have data
+    if (nc > 0) legend.classList.add('visible');
+  }
+
+  // ── graph init ────────────────────────────────────────────────────────────
+  const container = document.getElementById('graph');
+
+  // ── layout freeze helpers ──────────────────────────────────────────────
+  function freezeLayout() {
+    graph.graphData().nodes.forEach(node => {
+      node.fx = node.x;
+      node.fy = node.y;
+      node.fz = node.z;
+    });
+  }
+
+  // Unfreeze only nodes that don't yet have a position (new arrivals)
+  function thawNewNodes() {
+    graph.graphData().nodes.forEach(node => {
+      if (node.x == null) {
+        delete node.fx;
+        delete node.fy;
+        delete node.fz;
+      }
+    });
+  }
+
+  const graph = ForceGraph3D()(container)
+    .backgroundColor('#080810')
+    .width(window.innerWidth)
+    .height(window.innerHeight)
+    .showNavInfo(false)
+    // Pre-run simulation invisibly so nodes are already spread on first paint
+    .warmupTicks(200)
+    // Settle faster after warmup
+    .d3AlphaDecay(0.04)
+    .d3VelocityDecay(0.5)
+    .cooldownTicks(150)
+    // Auto-freeze once the engine naturally stops
+    .onEngineStop(freezeLayout)
+
+    // ── node appearance ────────────────────────────────────────────────────
+    .nodeColor((node) => {
+      const typeMatch = activeTypeFilter.size === 0 || activeTypeFilter.has(node.type);
+      const clusterMatch = !selectedPromptId || node.promptId === selectedPromptId;
+      return typeMatch && clusterMatch ? hexColor(node.type) : '#1a1a2e';
+    })
+    .nodeVal((node) => Math.max(node.size ?? 4, 2))
+    .nodeRelSize(1)
+    .nodeOpacity(0.92)
+    .nodeResolution(12)
+
+    // ── link styling ──────────────────────────────────────────────────────
+    .linkColor((link) => {
+      if (selectedPromptId) {
+        // after force simulation runs, source/target may be mutated to node objects
+        const srcId = link.source?.id ?? link.source;
+        const tgtId = link.target?.id ?? link.target;
+        const srcNode = graphData.nodes.find(n => n.id === srcId);
+        const tgtNode = graphData.nodes.find(n => n.id === tgtId);
+        if (srcNode?.promptId === selectedPromptId || tgtNode?.promptId === selectedPromptId) {
+          return 'rgba(255,255,255,0.4)';
+        }
+        return 'rgba(255,255,255,0.02)';
+      }
+      return 'rgba(255,255,255,0.18)';
+    })
+    .linkWidth(0.5)
+    .linkOpacity(1)
+
+    // ── subagent particle trails ───────────────────────────────────────────
+    .linkDirectionalParticles((link) => link.isSubagent ? 4 : 0)
+    .linkDirectionalParticleSpeed(0.003)
+    .linkDirectionalParticleWidth(2)
+    .linkDirectionalParticleColor(() => '#2dd4bf')
+
+    // ── hover ─────────────────────────────────────────────────────────────
+    .onNodeHover((node) => {
+      container.style.cursor = node ? 'pointer' : 'default';
+
+      if (!node) {
+        tooltip.classList.remove('visible');
+        return;
+      }
+
+      const color = hexColor(node.type);
+      tooltipInner.style.borderLeftColor = color;
+      tooltipType.textContent = node.type.replace('_', ' ');
+      tooltipType.style.color = color;
+      tooltipLabel.textContent = node.label ?? node.id;
+      tooltipDetail.textContent = node.detail ?? '';
+      tooltipDetail.style.display = node.detail ? 'block' : 'none';
+
+      tooltip.classList.add('visible');
+      positionTooltip();
+    })
+
+    // ── click ─────────────────────────────────────────────────────────────
+    .onNodeClick((node) => {
+      freezeLayout();
+      if (node.type === 'prompt') {
+        if (selectedPromptId === node.promptId) {
+          selectedPromptId = null;
+          clusterBadge.classList.remove('visible');
+        } else {
+          selectedPromptId = node.promptId;
+          const clusterNodes = graphData.nodes.filter(n => n.promptId === node.promptId);
+          const label = node.label?.slice(0, 48) ?? node.promptId;
+          clusterBadge.textContent = `cluster: ${label}${label.length >= 48 ? '…' : ''}  ·  ${clusterNodes.length} nodes`;
+          clusterBadge.classList.add('visible');
+        }
+        refreshGraph();
+      }
+    })
+
+    // click on background = freeze + clear all selections
+    .onBackgroundClick(() => {
+      freezeLayout();
+      let changed = !!selectedPromptId || activeTypeFilter.size > 0;
+      selectedPromptId = null;
+      activeTypeFilter.clear();
+      clusterBadge.classList.remove('visible');
+      if (changed) { syncLegendUI(); refreshGraph(); }
+    });
+
+  // Stronger repulsion so nodes spread out and don't pile up
+  graph.d3Force('charge').strength(-120);
+
+  // ── legend type filter ────────────────────────────────────────────────
+  const legendItems = document.querySelectorAll('.legend-item[data-type]');
+  const legendClear = document.getElementById('legend-clear');
+
+  function syncLegendUI() {
+    const hasFilter = activeTypeFilter.size > 0;
+    legendItems.forEach(el => {
+      const t = el.dataset.type;
+      el.classList.toggle('active', hasFilter && activeTypeFilter.has(t));
+      el.classList.toggle('inactive', hasFilter && !activeTypeFilter.has(t));
+    });
+    legendClear.classList.toggle('visible', hasFilter);
+  }
+
+  legendItems.forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const t = el.dataset.type;
+      if (activeTypeFilter.has(t)) {
+        activeTypeFilter.delete(t);
+      } else {
+        activeTypeFilter.add(t);
+      }
+      syncLegendUI();
+      refreshGraph();
+    });
+  });
+
+  legendClear.addEventListener('click', (e) => {
+    e.stopPropagation();
+    activeTypeFilter.clear();
+    syncLegendUI();
+    refreshGraph();
+  });
+
+  // ── cluster selection refresh ──────────────────────────────────────────
+  function refreshGraph() {
+    // Re-evaluate nodeColor without reheating the simulation
+    graph.nodeColor(graph.nodeColor());
+  }
+
+  // ── resize ────────────────────────────────────────────────────────────
+  window.addEventListener('resize', () => {
+    graph.width(window.innerWidth).height(window.innerHeight);
+  });
+
+  // ── freeze on tab hide so returning to the tab doesn't reheat ─────────
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) freezeLayout();
+  });
+
+  // ── merge helper ──────────────────────────────────────────────────────
+  function mergeGraphData(existing, incoming) {
+    const nodeMap = new Map(existing.nodes.map(n => [n.id, n]));
+    incoming.nodes.forEach(n => nodeMap.set(n.id, n));
+
+    // deduplicate links by source+target string
+    const linkSet = new Set(existing.links.map(l => {
+      const s = l.source?.id ?? l.source;
+      const t = l.target?.id ?? l.target;
+      return `${s}→${t}`;
+    }));
+    const newLinks = incoming.links.filter(l => {
+      const s = l.source?.id ?? l.source;
+      const t = l.target?.id ?? l.target;
+      const key = `${s}→${t}`;
+      if (linkSet.has(key)) return false;
+      linkSet.add(key);
+      return true;
+    });
+
+    return {
+      nodes: Array.from(nodeMap.values()),
+      links: [...existing.links, ...newLinks],
+    };
+  }
+
+  // ── initial load ──────────────────────────────────────────────────────
+  fetch('/api/graph')
+    .then(r => r.json())
+    .then(data => {
+      // normalise raw node/link data
+      graphData = data;
+      graph.graphData(graphData);
+      updateStats();
+    })
+    .catch(err => {
+      console.warn('[agentgit] /api/graph unavailable, starting empty:', err);
+      graphData = { nodes: [], links: [] };
+      graph.graphData(graphData);
+    });
+
+  // ── SSE live updates ──────────────────────────────────────────────────
+  function connectSSE() {
+    const es = new EventSource('/api/live');
+
+    es.addEventListener('open', () => {
+      liveDot.classList.add('live');
+    });
+
+    let applyTimer = null;
+    es.addEventListener('message', (e) => {
+      try {
+        const incoming = JSON.parse(e.data);
+        // Skip non-graph control messages (e.g. {"type":"connected"})
+        if (!incoming.nodes) return;
+        graphData = mergeGraphData(graphData, incoming);
+        updateStats();
+
+        // Debounce: batch burst of SSE messages, then only simulate new nodes
+        clearTimeout(applyTimer);
+        applyTimer = setTimeout(() => {
+          graph.graphData(graphData);
+          thawNewNodes();
+        }, 80);
+
+        // flash the live dot
+        liveDot.style.background = '#22c55e';
+        clearTimeout(liveDot._flashTimer);
+        liveDot._flashTimer = setTimeout(() => {
+          liveDot.style.background = '';
+        }, 400);
+      } catch (err) {
+        console.warn('[agentgit] SSE parse error:', err);
+      }
+    });
+
+    es.addEventListener('error', () => {
+      liveDot.classList.remove('live');
+      liveDot.style.background = '';
+      es.close();
+      // Reconnect and refetch full graph (server may have restarted)
+      setTimeout(() => {
+        fetch('/api/graph')
+          .then(r => r.json())
+          .then(data => { graphData = data; graph.graphData(graphData); updateStats(); })
+          .catch(() => {});
+        connectSSE();
+      }, 3000);
+    });
+  }
+
+  connectSSE();
+
+})();
+</script>
+</body>
+</html>

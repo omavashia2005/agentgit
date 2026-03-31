@@ -1,0 +1,31 @@
+{
+  "name": "agentgit",
+  "version": "0.1.0",
+  "description": "Visualize Claude Code agent sessions as a live 3D force-directed graph",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "src/",
+    "public/"
+  ],
+  "bin": {
+    "agentgit": "src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts"
+  },
+  "dependencies": {
+    "chokidar": "^4",
+    "commander": "^13",
+    "ink": "^6",
+    "ink-spinner": "^5",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19",
+    "@types/react-dom": "^19"
+  }
+}
