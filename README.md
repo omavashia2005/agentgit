@@ -1,10 +1,10 @@
 # agentgit
 
+<video src="output.mp4" controls width="100%"></video>
+
 Visualize Claude Code agent sessions as a live 3D force-directed graph in your browser.
 
 As Claude works — writing files, running commands, spawning subagents — agentgit builds a real-time graph of everything that happened and why.
-
-![agentgit graph](https://raw.githubusercontent.com/omavashia/agentgit/main/public/index.html)
 
 ## Install
 
@@ -12,11 +12,6 @@ As Claude works — writing files, running commands, spawning subagents — agen
 bun install -g agentgit
 ```
 
-Or run without installing:
-
-```sh
-bunx agentgit init
-```
 
 ## Usage
 
