@@ -1,8 +1,12 @@
 {
   "name": "agentgit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Visualize Claude Code agent sessions as a live 3D force-directed graph",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omavashia2005/agentgit"
+  },
   "type": "module",
   "files": [
     "src/",
@@ -16,6 +20,7 @@
     "start": "bun src/index.ts"
   },
   "dependencies": {
+    "agentgit": "^0.1.1",
     "chokidar": "^4",
     "commander": "^13",
     "ink": "^6",

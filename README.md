@@ -1,5 +1,7 @@
 # agentgit
 
+[![npm downloads](https://img.shields.io/npm/dt/agentgit)](https://www.npmjs.com/package/agentgit)
+
 <video src="https://github.com/user-attachments/assets/86e83e01-0074-4986-b859-74c0a5fda7c5" controls width="100%"></video>
 
 Visualize Claude Code agent sessions as a live 3D force-directed graph in your browser.
